@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -22,13 +23,14 @@ func main() {
 	}
 	defer file.Close()
 
-	answer, err := Solve(file)
+	part1, part2, err := Solve(file)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "solve error: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Println(answer)
+	fmt.Printf("Part 1: %d\n", part1)
+	fmt.Printf("Part 2: %d\n", part2)
 }
 
 func resolveInputPath(args []string) string {
@@ -41,31 +43,33 @@ func resolveInputPath(args []string) string {
 	return "input.txt"
 }
 
-func Solve(r io.Reader) (int64, error) {
+func Solve(r io.Reader) (int64, int64, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
 	text := strings.TrimSpace(string(data))
 	if text == "" {
-		return 0, fmt.Errorf("input is empty")
+		return 0, 0, fmt.Errorf("input is empty")
 	}
 
 	ranges, err := parseRanges(text)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
-	var total int64
+	var totalTwice int64
+	var totalAny int64
 	for _, rg := range ranges {
 		if rg.start > rg.end {
-			return 0, fmt.Errorf("range start %d greater than end %d", rg.start, rg.end)
+			return 0, 0, fmt.Errorf("range start %d greater than end %d", rg.start, rg.end)
 		}
-		total += sumInvalidInRange(rg)
+		totalTwice += sumInvalidRepeatedTwice(rg)
+		totalAny += sumInvalidAnyRepeat(rg)
 	}
 
-	return total, nil
+	return totalTwice, totalAny, nil
 }
 
 type idRange struct {
@@ -117,7 +121,7 @@ var pow10 = func() []int64 {
 	return vals
 }()
 
-func sumInvalidInRange(rg idRange) int64 {
+func sumInvalidRepeatedTwice(rg idRange) int64 {
 	var sum int64
 	for k := 1; k <= maxDigits/2; k++ {
 		baseMin := pow10[k-1]
@@ -159,4 +163,100 @@ func ceilDiv(num, denom int64) int64 {
 		return (num + denom - 1) / denom
 	}
 	return num / denom
+}
+
+func sumInvalidAnyRepeat(rg idRange) int64 {
+	var sum int64
+	for length := 2; length <= maxDigits && pow10[length-1] <= rg.end; length++ {
+		segmentStart := maxInt64(rg.start, pow10[length-1])
+		segmentEnd := minInt64(rg.end, pow10[length]-1)
+		if segmentStart > segmentEnd {
+			continue
+		}
+		sum += sumInvalidLengthSegment(segmentStart, segmentEnd, length)
+	}
+	return sum
+}
+
+func sumInvalidLengthSegment(start, end int64, length int) int64 {
+	divisors := properDivisors(length)
+	if len(divisors) == 0 {
+		return 0
+	}
+	sums := make(map[int]int64, len(divisors))
+	var total int64
+
+	for idx, d := range divisors {
+		repeats := length / d
+		multiplier := repeatMultiplier(d, repeats)
+
+		loBase := pow10[d-1]
+		hiBase := pow10[d] - 1
+
+		if candidate := ceilDiv(start, multiplier); candidate > loBase {
+			loBase = candidate
+		}
+		if candidate := end / multiplier; candidate < hiBase {
+			hiBase = candidate
+		}
+
+		var g int64
+		if loBase <= hiBase {
+			count := hiBase - loBase + 1
+			sumBases := (loBase + hiBase) * count / 2
+			g = sumBases * multiplier
+		}
+
+		for j := 0; j < idx; j++ {
+			smaller := divisors[j]
+			if d%smaller == 0 {
+				g -= sums[smaller]
+			}
+		}
+
+		sums[d] = g
+		total += g
+	}
+
+	return total
+}
+
+func properDivisors(n int) []int {
+	if n <= 1 {
+		return nil
+	}
+	var divs []int
+	for d := 1; d*d <= n; d++ {
+		if n%d != 0 {
+			continue
+		}
+		if d < n {
+			divs = append(divs, d)
+		}
+		other := n / d
+		if other != d && other < n {
+			divs = append(divs, other)
+		}
+	}
+	sort.Ints(divs)
+	return divs
+}
+
+func repeatMultiplier(blockLen, repeats int) int64 {
+	totalDigits := blockLen * repeats
+	return (pow10[totalDigits] - 1) / (pow10[blockLen] - 1)
+}
+
+func minInt64(a, b int64) int64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func maxInt64(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
 }
