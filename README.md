@@ -13,3 +13,5 @@ Solutions for https://adventofcode.com/2025
 - Day 9: Movie Theater ⭐⭐
 - Day 10: Factory ⭐⭐
 - Day 11: Reactor ⭐⭐
+- Day 12: Christmas Tree Farm ⭐ (+⭐ as bonus) - This solution works but is extremly slow.
+- I probably try to optimize it later.
